@@ -78,8 +78,10 @@ void MapTest_Aligned() {
 
 TEST(MapTest, Aligned) { MapTest_Aligned<AlignedAsDefault>(); }
 TEST(MapTest, AlignedOnArena) { MapTest_Aligned<AlignedAsDefault, true>(); }
+#ifndef __i386__
 TEST(MapTest, Aligned8) { MapTest_Aligned<AlignedAs8>(); }
 TEST(MapTest, Aligned8OnArena) { MapTest_Aligned<AlignedAs8, true>(); }
+#endif
 
 
 }  // namespace

@@ -158,14 +158,14 @@
 #if defined(__GNUC__) && defined(__GNUC_MINOR__) \
     && defined(__GNUC_PATCHLEVEL__)
 #  define PROTOBUF_GNUC_MIN(x, y) \
-  (__GNUC__ > (x) || __GNUC__ == (x) && __GNUC_MINOR__ >= (y))
+  (__GNUC__ > (x) || (__GNUC__ == (x) && __GNUC_MINOR__ >= (y)))
 #else
 #  define PROTOBUF_GNUC_MIN(x, y) 0
 #endif
 
 #if defined(__clang__) && defined(__clang_major__) && defined(__clang_minor__)
 #define PROTOBUF_CLANG_MIN(x, y) \
-  (__clang_major__ > (x) || __clang_major__ == (x) && __clang_minor__ >= (y))
+  (__clang_major__ > (x) || (__clang_major__ == (x) && __clang_minor__ >= (y)))
 #else
 #define PROTOBUF_CLANG_MIN(x, y) 0
 #endif
@@ -971,8 +971,9 @@
 // globally even though it's only used for PROTOBUF_FIELD_OFFSET.
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #ifdef __clang__
-// TODO(b/255348263): Upgrade our kokoro Ubuntu to use clang 6, then change th 5 to a 6
-static_assert(PROTOBUF_CLANG_MIN(5, 0), "Protobuf only supports Clang 6.0 and newer.");
+static_assert(PROTOBUF_CLANG_MIN(6, 0), "Protobuf only supports Clang 6.0 and newer.");
+#elif defined(__GNUC__)
+static_assert(PROTOBUF_GNUC_MIN(7, 3), "Protobuf only supports GCC 7.3 and newer.");
 #endif
 // Some versions of GCC seem to think that
 //  [this] { Foo(); }
