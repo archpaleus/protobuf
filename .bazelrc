@@ -1,5 +1,8 @@
 build --incompatible_enable_cc_toolchain_resolution
 build --cxxopt=-std=c++14 --host_cxxopt=-std=c++14
+build --cxxopt=-Wno-error=unused-function
+#build --copt=-std=c99 --host_copt=-std=c99
+#build --cxxopt=-Wno-error=deprecated-non-prototype
 
 build:dbg --compilation_mode=dbg
 

@@ -177,6 +177,7 @@ cc_binary(
 wasm_cc_binary(
     name = "protoc-wasm",
     visibility = ["//visibility:public"],
+    threads = "emscripten",
     cc_target = "protoc",
 )
 
