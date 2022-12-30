@@ -15,6 +15,13 @@ COPTS = select({
         "/wd4800",  # 'type' : forcing value to bool 'true' or 'false' (performance warning)
         "/wd4996",  # The compiler encountered a deprecated declaration.
     ],
+    "//build_defs:config_wasm": [
+	"-pthread",
+        "-DHAVE_ZLIB",
+        "-Woverloaded-virtual",
+        "-Wno-sign-compare",
+        "-Werror",
+    ],
     "//conditions:default": [
         "-DHAVE_ZLIB",
         "-Woverloaded-virtual",
@@ -33,6 +40,11 @@ LINK_OPTS = select({
     "//build_defs:config_msvc": [
         # Suppress linker warnings about files with no symbols defined.
         "-ignore:4221",
+    ],
+    "//build_defs:config_wasm": [
+	"-pthread",
+	"-lnodefs.js",
+	"-lnoderawfs.js",
     ],
     "//conditions:default": [
         "-lpthread",

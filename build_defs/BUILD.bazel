@@ -27,6 +27,11 @@ config_setting(
     values = {"cpu": "linux-x86_64"},
 )
 
+config_setting(
+    name = "config_wasm",
+    values = {"cpu": "wasm"},
+)
+
 # Android NDK builds can specify different crosstool_top flags to choose which
 # STL they use for C++. We need these multiple variants to catch all of those
 # versions of crosstool_top and reliably detect Android.
