@@ -8,6 +8,22 @@ local_repository(
 )
 
 http_archive(
+    name = "emsdk",
+    #sha256 = "d55e3c73fc4f8d1fecb7aabe548de86bdb55080fe6b12ce593d63b8bade54567",
+    strip_prefix = "emsdk-63a63e1664d4b656994606c6e334d1e11e4d9f10/bazel",
+    url = "https://github.com/emscripten-core/emsdk/archive/63a63e1664d4b656994606c6e334d1e11e4d9f10.tar.gz",
+)
+
+load("@emsdk//:deps.bzl", emsdk_deps = "deps")
+emsdk_deps()
+
+load("@emsdk//:emscripten_deps.bzl", emsdk_emscripten_deps = "emscripten_deps")
+emsdk_emscripten_deps(emscripten_version = "3.1.28")
+
+load("@emsdk//:toolchains.bzl", "register_emscripten_toolchains")
+register_emscripten_toolchains()
+
+http_archive(
     name = "com_google_googletest",
     sha256 = "ea54c9845568cb31c03f2eddc7a40f7f83912d04ab977ff50ec33278119548dd",
     strip_prefix = "googletest-4c9a3bb62bf3ba1f1010bf96f9c8ed767b363774",

@@ -7,6 +7,8 @@ load("@rules_java//java:defs.bzl", "java_lite_proto_library", "java_proto_librar
 load("//build_defs:cpp_opts.bzl", "COPTS", "LINK_OPTS", "PROTOC_LINK_OPTS")
 load(":protobuf.bzl", "internal_objc_proto_library", "internal_php_proto_library", "internal_py_proto_library", "internal_ruby_proto_library")
 
+load("@emsdk//emscripten_toolchain:wasm_rules.bzl", "wasm_cc_binary")
+
 licenses(["notice"])
 
 exports_files(["LICENSE"])
@@ -170,6 +172,12 @@ cc_binary(
     linkopts = LINK_OPTS + PROTOC_LINK_OPTS,
     visibility = ["//visibility:public"],
     deps = ["//src/google/protobuf/compiler:protoc_lib"],
+)
+
+wasm_cc_binary(
+    name = "protoc-wasm",
+    visibility = ["//visibility:public"],
+    cc_target = "protoc",
 )
 
 ################################################################################
