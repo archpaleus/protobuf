@@ -18,7 +18,6 @@ COPTS = select({
     "//build_defs:config_wasm": [
 	"-pthread",
         "-DHAVE_ZLIB",
-        "-Woverloaded-virtual",
         "-Wno-sign-compare",
         "-Werror",
     ],
@@ -42,9 +41,9 @@ LINK_OPTS = select({
         "-ignore:4221",
     ],
     "//build_defs:config_wasm": [
-	"-pthread",
 	"-lnodefs.js",
 	"-lnoderawfs.js",
+	"-pthread",
     ],
     "//conditions:default": [
         "-lpthread",
