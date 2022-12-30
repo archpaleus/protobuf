@@ -37,6 +37,8 @@ def protobuf_deps():
         )
 
     if not native.existing_rule("com_google_absl"):
+        # Modified to a recent main branch commit to fix issues with 
+        # function prototype in absl/hash/local_hash.h
         _github_archive(
             name = "com_google_absl",
             repo = "https://github.com/abseil/abseil-cpp",
