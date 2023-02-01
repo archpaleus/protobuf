@@ -34,6 +34,7 @@
 #include <complex>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -42,7 +43,7 @@
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/dynamic_message.h"
 #include "google/protobuf/message.h"
-#include "google/protobuf/stubs/logging.h"
+#include "absl/log/absl_check.h"
 #include "absl/status/status.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/escaping.h"
@@ -416,7 +417,7 @@ absl::Status WriteField(JsonWriter& writer, const Msg<Traits>& msg,
     return WriteRepeated<Traits>(writer, msg, field);
   } else if (Traits::GetSize(field, msg) == 0) {
     // We can only get here if always_print_primitive_fields is true.
-    GOOGLE_ABSL_DCHECK(writer.options().always_print_primitive_fields);
+    ABSL_DCHECK(writer.options().always_print_primitive_fields);
 
     if (Traits::FieldType(field) == FieldDescriptor::TYPE_GROUP) {
       // We do not yet have full group support, but this is required so that we
@@ -489,6 +490,17 @@ absl::Status WriteValue(JsonWriter& writer, const Msg<Traits>& msg,
   if (Traits::GetSize(number_field, msg) > 0) {
     auto x = Traits::GetDouble(number_field, msg);
     RETURN_IF_ERROR(x.status());
+    if (std::isnan(*x)) {
+      return absl::InvalidArgumentError(
+          "google.protobuf.Value cannot encode double values for nan, "
+          "because it would be parsed as a string");
+    }
+    if (*x == std::numeric_limits<double>::infinity() ||
+        *x == -std::numeric_limits<double>::infinity()) {
+      return absl::InvalidArgumentError(
+          "google.protobuf.Value cannot encode double values for "
+          "infinity, because it would be parsed as a string");
+    }
     writer.Write(*x);
     return absl::OkStatus();
   }
@@ -527,7 +539,7 @@ absl::Status WriteValue(JsonWriter& writer, const Msg<Traits>& msg,
     });
   }
 
-  GOOGLE_ABSL_CHECK(is_top_level)
+  ABSL_CHECK(is_top_level)
       << "empty, non-top-level Value must be handled one layer "
          "up, since it prints an empty string; reaching this "
          "statement is always a bug";
@@ -822,11 +834,11 @@ absl::Status BinaryToJsonStream(google::protobuf::util::TypeResolver* resolver,
                                 io::ZeroCopyOutputStream* json_output,
                                 json_internal::WriterOptions options) {
   // NOTE: Most of the contortions in this function are to allow for capture of
-  // input and output of the parser in GOOGLE_ABSL_DLOG mode. Destruction order is very
+  // input and output of the parser in ABSL_DLOG mode. Destruction order is very
   // critical in this function, because io::ZeroCopy*Stream types usually only
   // flush on destruction.
 
-  // For GOOGLE_ABSL_DLOG, we would like to print out the input and output, which
+  // For ABSL_DLOG, we would like to print out the input and output, which
   // requires buffering both instead of doing "zero copy". This block, and the
   // one at the end of the function, set up and tear down interception of the
   // input and output streams.

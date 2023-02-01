@@ -52,6 +52,7 @@ typedef struct GPBTimestamp__storage_ {
 + (GPBDescriptor *)descriptor {
   static GPBDescriptor *descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static GPBMessageFieldDescription fields[] = {
       {
         .name = "seconds",
@@ -74,7 +75,6 @@ typedef struct GPBTimestamp__storage_ {
     };
     GPBDescriptor *localDescriptor =
         [GPBDescriptor allocDescriptorForClass:[GPBTimestamp class]
-                                     rootClass:[GPBTimestampRoot class]
                                           file:GPBTimestampRoot_FileDescriptor()
                                         fields:fields
                                     fieldCount:(uint32_t)(sizeof(fields) / sizeof(GPBMessageFieldDescription))

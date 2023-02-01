@@ -52,6 +52,7 @@ static GPBFileDescriptor *GPBTypeRoot_FileDescriptor(void) {
 GPBEnumDescriptor *GPBSyntax_EnumDescriptor(void) {
   static _Atomic(GPBEnumDescriptor*) descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static const char *valueNames =
         "SyntaxProto2\000SyntaxProto3\000";
     static const int32_t values[] = {
@@ -88,6 +89,7 @@ BOOL GPBSyntax_IsValidValue(int32_t value__) {
 GPBEnumDescriptor *GPBField_Kind_EnumDescriptor(void) {
   static _Atomic(GPBEnumDescriptor*) descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static const char *valueNames =
         "TypeUnknown\000TypeDouble\000TypeFloat\000TypeInt"
         "64\000TypeUint64\000TypeInt32\000TypeFixed64\000Type"
@@ -163,6 +165,7 @@ BOOL GPBField_Kind_IsValidValue(int32_t value__) {
 GPBEnumDescriptor *GPBField_Cardinality_EnumDescriptor(void) {
   static _Atomic(GPBEnumDescriptor*) descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static const char *valueNames =
         "CardinalityUnknown\000CardinalityOptional\000C"
         "ardinalityRequired\000CardinalityRepeated\000";
@@ -225,6 +228,7 @@ typedef struct GPBType__storage_ {
 + (GPBDescriptor *)descriptor {
   static GPBDescriptor *descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static GPBMessageFieldDescription fields[] = {
       {
         .name = "name",
@@ -283,7 +287,6 @@ typedef struct GPBType__storage_ {
     };
     GPBDescriptor *localDescriptor =
         [GPBDescriptor allocDescriptorForClass:[GPBType class]
-                                     rootClass:[GPBTypeRoot class]
                                           file:GPBTypeRoot_FileDescriptor()
                                         fields:fields
                                     fieldCount:(uint32_t)(sizeof(fields) / sizeof(GPBMessageFieldDescription))
@@ -344,6 +347,7 @@ typedef struct GPBField__storage_ {
 + (GPBDescriptor *)descriptor {
   static GPBDescriptor *descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static GPBMessageFieldDescription fields[] = {
       {
         .name = "kind",
@@ -438,7 +442,6 @@ typedef struct GPBField__storage_ {
     };
     GPBDescriptor *localDescriptor =
         [GPBDescriptor allocDescriptorForClass:[GPBField class]
-                                     rootClass:[GPBTypeRoot class]
                                           file:GPBTypeRoot_FileDescriptor()
                                         fields:fields
                                     fieldCount:(uint32_t)(sizeof(fields) / sizeof(GPBMessageFieldDescription))
@@ -507,6 +510,7 @@ typedef struct GPBEnum__storage_ {
 + (GPBDescriptor *)descriptor {
   static GPBDescriptor *descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static GPBMessageFieldDescription fields[] = {
       {
         .name = "name",
@@ -556,7 +560,6 @@ typedef struct GPBEnum__storage_ {
     };
     GPBDescriptor *localDescriptor =
         [GPBDescriptor allocDescriptorForClass:[GPBEnum class]
-                                     rootClass:[GPBTypeRoot class]
                                           file:GPBTypeRoot_FileDescriptor()
                                         fields:fields
                                     fieldCount:(uint32_t)(sizeof(fields) / sizeof(GPBMessageFieldDescription))
@@ -604,6 +607,7 @@ typedef struct GPBEnumValue__storage_ {
 + (GPBDescriptor *)descriptor {
   static GPBDescriptor *descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static GPBMessageFieldDescription fields[] = {
       {
         .name = "name",
@@ -635,7 +639,6 @@ typedef struct GPBEnumValue__storage_ {
     };
     GPBDescriptor *localDescriptor =
         [GPBDescriptor allocDescriptorForClass:[GPBEnumValue class]
-                                     rootClass:[GPBTypeRoot class]
                                           file:GPBTypeRoot_FileDescriptor()
                                         fields:fields
                                     fieldCount:(uint32_t)(sizeof(fields) / sizeof(GPBMessageFieldDescription))
@@ -669,6 +672,7 @@ typedef struct GPBOption__storage_ {
 + (GPBDescriptor *)descriptor {
   static GPBDescriptor *descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     static GPBMessageFieldDescription fields[] = {
       {
         .name = "name",
@@ -691,7 +695,6 @@ typedef struct GPBOption__storage_ {
     };
     GPBDescriptor *localDescriptor =
         [GPBDescriptor allocDescriptorForClass:[GPBOption class]
-                                     rootClass:[GPBTypeRoot class]
                                           file:GPBTypeRoot_FileDescriptor()
                                         fields:fields
                                     fieldCount:(uint32_t)(sizeof(fields) / sizeof(GPBMessageFieldDescription))

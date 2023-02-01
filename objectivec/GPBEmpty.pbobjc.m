@@ -48,9 +48,9 @@ typedef struct GPBEmpty__storage_ {
 + (GPBDescriptor *)descriptor {
   static GPBDescriptor *descriptor = nil;
   if (!descriptor) {
+    GPB_DEBUG_CHECK_RUNTIME_VERSIONS();
     GPBDescriptor *localDescriptor =
         [GPBDescriptor allocDescriptorForClass:[GPBEmpty class]
-                                     rootClass:[GPBEmptyRoot class]
                                           file:GPBEmptyRoot_FileDescriptor()
                                         fields:NULL
                                     fieldCount:0

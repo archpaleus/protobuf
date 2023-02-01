@@ -330,13 +330,12 @@ def _BuildMessageFromTypeName(type_name, descriptor_pool):
   if descriptor_pool is None:
     from google.protobuf import descriptor_pool as pool_mod
     descriptor_pool = pool_mod.Default()
-  from google.protobuf import symbol_database
-  database = symbol_database.Default()
+  from google.protobuf import message_factory
   try:
     message_descriptor = descriptor_pool.FindMessageTypeByName(type_name)
   except KeyError:
     return None
-  message_type = database.GetPrototype(message_descriptor)
+  message_type = message_factory.GetMessageClass(message_descriptor)
   return message_type()
 
 
@@ -859,9 +858,9 @@ class _Parser(object):
       str_lines = (
           line if isinstance(line, str) else line.decode('utf-8')
           for line in lines)
+      tokenizer = Tokenizer(str_lines)
     except UnicodeDecodeError as e:
-      raise self._StringParseError(e)
-    tokenizer = Tokenizer(str_lines)
+      raise ParseError from e
     if message:
       self.root_type = message.DESCRIPTOR.full_name
     while not tokenizer.AtEnd():
