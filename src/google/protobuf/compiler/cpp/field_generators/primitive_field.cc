@@ -37,11 +37,9 @@
 #include <tuple>
 #include <vector>
 
-#include "google/protobuf/descriptor.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/absl_log.h"
 #include "absl/memory/memory.h"
-#include "absl/strings/substitute.h"
 #include "absl/types/optional.h"
 #include "google/protobuf/compiler/cpp/field_generators/generators.h"
 #include "google/protobuf/compiler/cpp/helpers.h"
@@ -58,7 +56,7 @@ namespace {
 using ::google::protobuf::internal::WireFormat;
 using ::google::protobuf::internal::WireFormatLite;
 using Sub = ::google::protobuf::io::Printer::Sub;
-using Annotation = ::google::protobuf::GeneratedCodeInfo::Annotation;
+using Semantic = ::google::protobuf::io::AnnotationCollector::Semantic;
 
 // For encodings with fixed sizes, returns that size in bytes.
 absl::optional<size_t> FixedSize(FieldDescriptor::Type type) {
@@ -167,7 +165,7 @@ class SingularPrimitive final : public FieldGeneratorBase {
 
   void GenerateConstexprAggregateInitializer(io::Printer* p) const override {
     p->Emit(R"cc(
-      /* .$field_$ = */ $kDefault$
+      /*decltype($field_$)*/ $kDefault$
     )cc");
   }
 
@@ -195,18 +193,10 @@ class SingularPrimitive final : public FieldGeneratorBase {
 };
 
 void SingularPrimitive::GenerateAccessorDeclarations(io::Printer* p) const {
+  auto v = p->WithVars(
+      AnnotatedAccessors(field_, {"", "_internal_", "_internal_set_"}));
+  auto vs = p->WithVars(AnnotatedAccessors(field_, {"set_"}, Semantic::kSet));
   p->Emit(
-      {
-          Sub("name", p->LookupVar("name")).AnnotatedAs(field_),
-          Sub("set_name", absl::StrCat("set_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
-          Sub("_internal_name",
-              absl::StrCat("_internal_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
-          Sub("_internal_set_name",
-              absl::StrCat("_internal_set_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
-      },
       R"cc(
         $DEPRECATED$ $Type$ $name$() const;
         $DEPRECATED$ void $set_name$($Type$ value);
@@ -340,7 +330,7 @@ class RepeatedPrimitive final : public FieldGeneratorBase {
 
   void GenerateConstexprAggregateInitializer(io::Printer* p) const override {
     p->Emit(R"cc(
-      /* .$field_$ = */ {}
+      /*decltype($field_$)*/ {}
     )cc");
     InitCachedSize(p);
   }
@@ -399,41 +389,27 @@ void RepeatedPrimitive::GeneratePrivateMembers(io::Printer* p) const {
 }
 
 void RepeatedPrimitive::GenerateAccessorDeclarations(io::Printer* p) const {
-  p->Emit(
-      {
-          Sub("name", p->LookupVar("name")).AnnotatedAs(field_),
-          Sub("set_name", absl::StrCat("set_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
-          Sub("add_name", absl::StrCat("add_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
-          Sub("mutable_name", absl::StrCat("mutable_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
+  auto v = p->WithVars(AnnotatedAccessors(
+      field_, {"", "_internal_", "_internal_add_", "_internal_mutable_"}));
+  auto vs =
+      p->WithVars(AnnotatedAccessors(field_, {"set_", "add_"}, Semantic::kSet));
+  auto va =
+      p->WithVars(AnnotatedAccessors(field_, {"mutable_"}, Semantic::kAlias));
+  p->Emit(R"cc(
+    $DEPRECATED$ $Type$ $name$(int index) const;
+    $DEPRECATED$ void $set_name$(int index, $Type$ value);
+    $DEPRECATED$ void $add_name$($Type$ value);
+    $DEPRECATED$ const $pb$::RepeatedField<$Type$>& $name$() const;
+    $DEPRECATED$ $pb$::RepeatedField<$Type$>* $mutable_name$();
 
-          Sub("_internal_name",
-              absl::StrCat("_internal_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
-          Sub("_internal_add_name",
-              absl::StrCat("_internal_add_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
-          Sub("_internal_mutable_name",
-              absl::StrCat("_internal_mutable_", p->LookupVar("name")))
-              .AnnotatedAs(field_),
-      },
-      R"cc(
-        $DEPRECATED$ $Type$ $name$(int index) const;
-        $DEPRECATED$ void $set_name$(int index, $Type$ value);
-        $DEPRECATED$ void $add_name$($Type$ value);
-        $DEPRECATED$ const $pb$::RepeatedField<$Type$>& $name$() const;
-        $DEPRECATED$ $pb$::RepeatedField<$Type$>* $mutable_name$();
+    private:
+    $Type$ $_internal_name$(int index) const;
+    void $_internal_add_name$($Type$ value);
+    const $pb$::RepeatedField<$Type$>& $_internal_name$() const;
+    $pb$::RepeatedField<$Type$>* $_internal_mutable_name$();
 
-        private:
-        $Type$ $_internal_name$(int index) const;
-        void $_internal_add_name$($Type$ value);
-        const $pb$::RepeatedField<$Type$>& $_internal_name$() const;
-        $pb$::RepeatedField<$Type$>* $_internal_mutable_name$();
-
-        public:
-      )cc");
+    public:
+  )cc");
 }
 
 void RepeatedPrimitive::GenerateInlineAccessorDefinitions(

@@ -47,6 +47,19 @@ http_archive(
     urls = ["https://github.com/bazelbuild/platforms/archive/da5541f26b7de1dc8e04c075c99df5351742a4a2.zip"],  # 2022-05-27
 )
 
+http_archive(
+    name = "com_google_googletest",
+    sha256 = "730215d76eace9dd49bf74ce044e8daa065d175f1ac891cc1d6bb184ef94e565",
+    strip_prefix = "googletest-f53219cdcb7b084ef57414efea92ee5b71989558",
+    urls = [
+        "https://github.com/google/googletest/archive/f53219cdcb7b084ef57414efea92ee5b71989558.tar.gz" # 2023-03-16
+    ],
+)
+
+load("@com_google_googletest//:googletest_deps.bzl", "googletest_deps")
+
+googletest_deps()
+
 # Load common dependencies.
 load("//:protobuf_deps.bzl", "PROTOBUF_MAVEN_ARTIFACTS", "protobuf_deps")
 protobuf_deps()
@@ -129,7 +142,27 @@ install_deps()
 load("@utf8_range//:workspace_deps.bzl", "utf8_range_deps")
 utf8_range_deps()
 
+http_archive(
+    name = "rules_fuzzing",
+    sha256 = "d9002dd3cd6437017f08593124fdd1b13b3473c7b929ceb0e60d317cb9346118",
+    strip_prefix = "rules_fuzzing-0.3.2",
+    urls = ["https://github.com/bazelbuild/rules_fuzzing/archive/v0.3.2.zip"],
+)
+
+load("@rules_fuzzing//fuzzing:repositories.bzl", "rules_fuzzing_dependencies")
+rules_fuzzing_dependencies()
+
 bind(
     name = "python_headers",
     actual = "@system_python//:python_headers",
 )
+
+http_archive(
+    name = "rules_rust",
+    sha256 = "d125fb75432dc3b20e9b5a19347b45ec607fabe75f98c6c4ba9badaab9c193ce",
+    urls = ["https://github.com/bazelbuild/rules_rust/releases/download/0.17.0/rules_rust-v0.17.0.tar.gz"],
+)
+
+load("@rules_rust//rust:repositories.bzl", "rules_rust_dependencies", "rust_register_toolchains")
+rules_rust_dependencies()
+rust_register_toolchains(edition = "2021")

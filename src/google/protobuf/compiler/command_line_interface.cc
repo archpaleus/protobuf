@@ -36,6 +36,8 @@
 
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
+#include "google/protobuf/compiler/allowlists/allowlists.h"
+#include "google/protobuf/descriptor_legacy.h"
 
 #include "google/protobuf/stubs/platform_macros.h"
 
@@ -86,6 +88,7 @@
 #include "absl/strings/substitute.h"
 #include "google/protobuf/compiler/code_generator.h"
 #include "google/protobuf/compiler/importer.h"
+#include "google/protobuf/compiler/retention.h"
 #include "google/protobuf/compiler/zip_writer.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/dynamic_message.h"
@@ -947,7 +950,7 @@ namespace {
 
 bool ContainsProto3Optional(const Descriptor* desc) {
   for (int i = 0; i < desc->field_count(); i++) {
-    if (desc->field(i)->has_optional_keyword()) {
+    if (FieldDescriptorLegacy(desc->field(i)).has_optional_keyword()) {
       return true;
     }
   }
@@ -960,12 +963,84 @@ bool ContainsProto3Optional(const Descriptor* desc) {
 }
 
 bool ContainsProto3Optional(const FileDescriptor* file) {
-  if (file->syntax() == FileDescriptor::SYNTAX_PROTO3) {
+  if (FileDescriptorLegacy(file).syntax() ==
+      FileDescriptorLegacy::Syntax::SYNTAX_PROTO3) {
     for (int i = 0; i < file->message_type_count(); i++) {
       if (ContainsProto3Optional(file->message_type(i))) {
         return true;
       }
     }
+  }
+  return false;
+}
+
+template <typename Visitor>
+struct VisitImpl {
+  Visitor visitor;
+  void Visit(const FieldDescriptor* descriptor) { visitor(descriptor); }
+
+  void Visit(const EnumDescriptor* descriptor) { visitor(descriptor); }
+
+  void Visit(const Descriptor* descriptor) {
+    visitor(descriptor);
+
+    for (int i = 0; i < descriptor->enum_type_count(); i++) {
+      Visit(descriptor->enum_type(i));
+    }
+
+    for (int i = 0; i < descriptor->field_count(); i++) {
+      Visit(descriptor->field(i));
+    }
+
+    for (int i = 0; i < descriptor->nested_type_count(); i++) {
+      Visit(descriptor->nested_type(i));
+    }
+
+    for (int i = 0; i < descriptor->extension_count(); i++) {
+      Visit(descriptor->extension(i));
+    }
+  }
+
+  void Visit(const std::vector<const FileDescriptor*>& descriptors) {
+    for (auto* descriptor : descriptors) {
+      visitor(descriptor);
+      for (int i = 0; i < descriptor->message_type_count(); i++) {
+        Visit(descriptor->message_type(i));
+      }
+      for (int i = 0; i < descriptor->enum_type_count(); i++) {
+        Visit(descriptor->enum_type(i));
+      }
+      for (int i = 0; i < descriptor->extension_count(); i++) {
+        Visit(descriptor->extension(i));
+      }
+    }
+  }
+};
+
+// Visit every node in the descriptors calling `visitor(node)`.
+// The visitor does not need to handle all possible node types. Types that are
+// not visitable via `visitor` will be ignored.
+// Disclaimer: this is not fully implemented yet to visit _every_ node.
+// VisitImpl might need to be updated where needs arise.
+template <typename Visitor>
+void VisitDescriptors(const std::vector<const FileDescriptor*>& descriptors,
+                      Visitor visitor) {
+  // Provide a fallback to ignore all the nodes that are not interesting to the
+  // input visitor.
+  struct VisitorImpl : Visitor {
+    explicit VisitorImpl(Visitor visitor) : Visitor(visitor) {}
+    using Visitor::operator();
+    // Honeypot to ignore all inputs that Visitor does not take.
+    void operator()(const void*) const {}
+  };
+
+  VisitImpl<VisitorImpl>{VisitorImpl(visitor)}.Visit(descriptors);
+}
+
+bool HasReservedFieldNumber(const FieldDescriptor* field) {
+  if (field->number() >= FieldDescriptor::kFirstReservedNumber &&
+      field->number() <= FieldDescriptor::kLastReservedNumber) {
+    return true;
   }
   return false;
 }
@@ -1063,6 +1138,38 @@ int CommandLineInterface::Run(int argc, const char* const argv[]) {
     return 1;
   }
 
+  bool validation_error = false;  // Defer exiting so we log more warnings.
+
+  VisitDescriptors(parsed_files, [&](const FieldDescriptor* field) {
+    if (HasReservedFieldNumber(field)) {
+      const char* error_link = nullptr;
+      validation_error = true;
+      std::string error;
+      if (field->number() >= FieldDescriptor::kFirstReservedNumber &&
+          field->number() <= FieldDescriptor::kLastReservedNumber) {
+        error = absl::Substitute(
+            "Field numbers $0 through $1 are reserved "
+            "for the protocol buffer library implementation.",
+            FieldDescriptor::kFirstReservedNumber,
+            FieldDescriptor::kLastReservedNumber);
+      } else {
+        error = absl::Substitute(
+            "Field number $0 is reserved for specific purposes.",
+            field->number());
+      }
+      if (error_link) {
+        absl::StrAppend(&error, "(See ", error_link, ")");
+      }
+      static_cast<DescriptorPool::ErrorCollector*>(error_collector.get())
+          ->RecordError(field->file()->name(), field->full_name(), nullptr,
+                        DescriptorPool::ErrorCollector::NUMBER, error);
+    }
+  });
+
+
+  if (validation_error) {
+    return 1;
+  }
 
   // We construct a separate GeneratorContext for each output location.  Note
   // that two code generators may output to the same location, in which case
@@ -2528,7 +2635,7 @@ void CommandLineInterface::GetTransitiveDependencies(
 
   // Add this file.
   FileDescriptorProto* new_descriptor = output->Add();
-  file->CopyTo(new_descriptor);
+  *new_descriptor = StripSourceRetentionOptions(*file);
   if (include_json_name) {
     file->CopyJsonNameTo(new_descriptor);
   }

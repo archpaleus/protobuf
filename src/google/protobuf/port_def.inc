@@ -1,3 +1,4 @@
+// -*- c++ -*-
 // Protocol Buffers - Google's data interchange format
 // Copyright 2008 Google Inc.  All rights reserved.
 // https://developers.google.com/protocol-buffers/
@@ -212,12 +213,24 @@ static_assert(PROTOBUF_CPLUSPLUS_MIN(201402L), "Protobuf only supports C++14 and
 // Owner: shaod@, gberg@
 #define PROTOBUF_FUTURE_DESCRIPTOR_EXTENSION_DECL 1
 
+// Enable cord handling.
+// Owner: mvels@, mkruskal@
+#define PROTOBUF_FUTURE_OPENSOURCE_CORD 1
+
+// Used to remove `RepeatedPtrField::GetArena() const`.
+// Owner: ezb@
+#define PROTOBUF_FUTURE_REMOVE_CONST_REPEATEDFIELD_GETARENA_API 1
+
+// Used to remove Protobuf editions feature.
+// Owner: mkruskal@
+#define PROTOBUF_FUTURE_EDITIONS 1
+
 #endif
 
 #ifdef PROTOBUF_VERSION
 #error PROTOBUF_VERSION was previously defined
 #endif
-#define PROTOBUF_VERSION 3021012
+#define PROTOBUF_VERSION 4022002
 
 #ifdef PROTOBUF_MIN_HEADER_VERSION_FOR_PROTOC
 #error PROTOBUF_MIN_HEADER_VERSION_FOR_PROTOC was previously defined
@@ -258,6 +271,21 @@ static_assert(PROTOBUF_CPLUSPLUS_MIN(201402L), "Protobuf only supports C++14 and
 # define PROTOBUF_ALWAYS_INLINE __forceinline
 #else
 # define PROTOBUF_ALWAYS_INLINE
+#endif
+
+#ifdef PROTOBUF_ALWAYS_INLINE_CALL
+#error PROTOBUF_ALWAYS_INLINE_CALL was previously defined
+#endif
+// For functions we want to force inline from the caller, instead of in the
+// declaration of the callee.
+// This is useful for lambdas where it is not easy to specify ALWAYS_INLINE.
+// Use like:
+//   PROTOBUF_ALWAYS_INLINE_CALL res = SomeFunc(args...);
+#if defined(__clang__) && !defined(PROTOBUF_NO_INLINE_CALL) && \
+    __has_cpp_attribute(clang::always_inline)
+#define PROTOBUF_ALWAYS_INLINE_CALL [[clang::always_inline]]
+#else
+#define PROTOBUF_ALWAYS_INLINE_CALL
 #endif
 
 #ifdef PROTOBUF_NDEBUG_INLINE
@@ -383,16 +411,6 @@ static_assert(PROTOBUF_CPLUSPLUS_MIN(201402L), "Protobuf only supports C++14 and
 #else
 # define PROTOBUF_DEPRECATED
 # define PROTOBUF_DEPRECATED_MSG(msg)
-#endif
-
-#if defined(PROTOBUF_DEPRECATED_ENUM)
-#error PROTOBUF_DEPRECATED_ENUM was previously defined
-#endif
-#if defined(__clang__) || defined(__GNUC__)
-// https://gcc.gnu.org/gcc-6/changes.html
-# define PROTOBUF_DEPRECATED_ENUM __attribute__((deprecated))
-#else
-# define PROTOBUF_DEPRECATED_ENUM
 #endif
 
 #if defined(__clang__)
@@ -601,21 +619,6 @@ static_assert(PROTOBUF_CPLUSPLUS_MIN(201402L), "Protobuf only supports C++14 and
 #define PROTOBUF_FALLTHROUGH_INTENDED [[gnu::fallthrough]]
 #else
 #define PROTOBUF_FALLTHROUGH_INTENDED
-#endif
-
-// PROTOBUF_ASSUME(pred) tells the compiler that it can assume pred is true. To
-// be safe, we also validate the assumption with a ABSL_DCHECK in unoptimized
-// builds. The macro does not do anything useful if the compiler does not
-// support __builtin_assume.
-#ifdef PROTOBUF_ASSUME
-#error PROTOBUF_ASSUME was previously defined
-#endif
-#if __has_builtin(__builtin_assume)
-#define PROTOBUF_ASSUME(pred) \
-  ABSL_DCHECK(pred);               \
-  __builtin_assume(pred)
-#else
-#define PROTOBUF_ASSUME(pred) ABSL_DCHECK(pred)
 #endif
 
 // Specify memory alignment for structs, classes, etc.
@@ -855,6 +858,19 @@ static_assert(PROTOBUF_CPLUSPLUS_MIN(201402L), "Protobuf only supports C++14 and
 // PROTOBUF_TC_PARAM_PASS passes values to match PROTOBUF_TC_PARAM_DECL.
 #define PROTOBUF_TC_PARAM_PASS msg, ptr, ctx, data, table, hasbits
 
+// PROTOBUF_TC_PARAM_NO_DATA_DECL and PROTOBUF_TC_PARAM_NO_DATA_PASS provide the
+// exact same ABI as above, except that they don't name or pass the `data`
+// argument. Specific functions such as `Error() and `ToTagDispatch()` don't
+// use the `data` argument. By not passing `data` down the call stack, we free
+// up the register holding that value, which may matter in highly optimized
+// functions such as varint parsing.
+#define PROTOBUF_TC_PARAM_NO_DATA_DECL                                        \
+  ::google::protobuf::MessageLite *msg, const char *ptr,                                \
+      ::google::protobuf::internal::ParseContext *ctx, ::google::protobuf::internal::TcFieldData, \
+      const ::google::protobuf::internal::TcParseTableBase *table, uint64_t hasbits
+#define PROTOBUF_TC_PARAM_NO_DATA_PASS \
+  msg, ptr, ctx, ::google::protobuf::internal::TcFieldData::DefaultInit(), table, hasbits
+
 #ifdef PROTOBUF_UNUSED
 #error PROTOBUF_UNUSED was previously defined
 #endif
@@ -949,6 +965,10 @@ static_assert(PROTOBUF_CPLUSPLUS_MIN(201402L), "Protobuf only supports C++14 and
 #undef STRICT
 #pragma push_macro("timezone")
 #undef timezone
+#pragma push_macro("TRUE")
+#undef TRUE
+#pragma push_macro("FALSE")
+#undef FALSE
 #endif  // _WIN32
 
 #ifdef __APPLE__
@@ -1009,6 +1029,13 @@ static_assert(PROTOBUF_CPLUSPLUS_MIN(201402L), "Protobuf only supports C++14 and
 //   int index = ...
 //   int value = vec[index];
 #pragma GCC diagnostic ignored "-Wsign-conversion"
+#if __GNUC__ == 12 && __GNUC_MINOR__ < 4
+// Wrong warning emitted when assigning a single char c-string to a std::string
+// in c++20 mode and optimization on.
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105329
+// Planned to be fixed by 12.3 but widen window to 12.4.
+#pragma GCC diagnostic ignored "-Wrestrict"
+#endif
 #endif  // __GNUC__
 
 // Silence some MSVC warnings in all our code.
@@ -1033,20 +1060,53 @@ static_assert(PROTOBUF_CPLUSPLUS_MIN(201402L), "Protobuf only supports C++14 and
 #define PROTOBUF_DEBUG false
 #endif
 
-// This `for` allows us to condition the `ABSL_LOG` on the define above, so that
-// code can write `PROTOBUF_DLOG(INFO) << ...;` and have it turned off when
-// debug logging is off.
-//
-// This is a `for`, not and `if`, to avoid it accidentally chaining with an
-// `else` below it.
-#define PROTOBUF_DLOG(x) \
-  for (bool b = PROTOBUF_DEBUG; b; b = false) ABSL_LOG(x)
-
 #define PROTO2_IS_OSS true
 
 #ifdef PROTOBUF_NO_THREADLOCAL
 #error PROTOBUF_NO_THREADLOCAL was previously defined
 #endif
+
+// port_def.inc may be included in very large compilation targets, so we need to
+// minimize adding symbol and source file information here. For this reason we
+// implement our own simple `protobuf_assumption_failed()` function for
+// asserting PROTOBUF_ASSUME predicates in debug builds.
+namespace google {
+namespace protobuf {
+namespace internal {
+PROTOBUF_EXPORT void protobuf_assumption_failed(const char *pred,
+                                                const char *file, int line);
+}  // namespace internal
+}  // namespace protobuf
+}  // namespace google
+
+// PROTOBUF_ASSUME(pred) tells the compiler that it can assume pred is true.
+// To be safe, we also validate the assumption in debug builds, printing an
+// assert style "Assumption failed: ..." message and aborting the program if
+// the predicate is false. The macro does not do anything useful if the
+// compiler does not support __builtin_assume.
+#ifdef PROTOBUF_ASSUME
+#error PROTOBUF_ASSUME was previously defined
+#endif
+#if __has_builtin(__builtin_assume)
+#ifdef NDEBUG
+#define PROTOBUF_ASSUME(pred) __builtin_assume(pred)
+#else  // NDEBUG
+#define PROTOBUF_ASSUME(pred)                                                  \
+  if (!(pred)) {                                                               \
+    ::google::protobuf::internal::protobuf_assumption_failed(#pred, __FILE__, __LINE__); \
+  }                                                                            \
+  __builtin_assume(pred)
+#endif  // NDEBUG
+#else   // has_builtin(__builtin_assume)
+#ifndef NDEBUG
+#define PROTOBUF_ASSUME(pred)                                                  \
+  if (!(pred)) {                                                               \
+    ::google::protobuf::internal::protobuf_assumption_failed(#pred, __FILE__, __LINE__); \
+  }
+#else  // !NDEBUG
+#define PROTOBUF_ASSUME(pred)
+#endif  // !NDEBUG
+#endif  // has_builtin(__builtin_assume)
 
 // We don't want code outside port_def doing complex testing, so
 // remove our portable condition test macros to nudge folks away from

@@ -48,6 +48,7 @@
 #include "absl/log/scoped_mock_log.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "google/protobuf/descriptor_legacy.h"
 #include "google/protobuf/unittest.pb.h"
 #include "google/protobuf/unittest_custom_options.pb.h"
 #include "google/protobuf/stubs/common.h"
@@ -540,7 +541,7 @@ TEST_F(FileDescriptorTest, Syntax) {
     DescriptorPool pool;
     const FileDescriptor* file = pool.BuildFile(proto);
     EXPECT_TRUE(file != nullptr);
-    EXPECT_EQ(FileDescriptor::SYNTAX_PROTO2, file->syntax());
+    EXPECT_EQ(FileDescriptorLegacy::Syntax::SYNTAX_PROTO2, FileDescriptorLegacy(file).syntax());
     FileDescriptorProto other;
     file->CopyTo(&other);
     EXPECT_EQ("proto2", other.syntax());
@@ -551,7 +552,8 @@ TEST_F(FileDescriptorTest, Syntax) {
     DescriptorPool pool;
     const FileDescriptor* file = pool.BuildFile(proto);
     EXPECT_TRUE(file != nullptr);
-    EXPECT_EQ(FileDescriptor::SYNTAX_PROTO3, file->syntax());
+    EXPECT_EQ(FileDescriptorLegacy::Syntax::SYNTAX_PROTO3,
+              FileDescriptorLegacy(file).syntax());
     FileDescriptorProto other;
     file->CopyTo(&other);
     EXPECT_EQ("proto3", other.syntax());
@@ -1118,6 +1120,66 @@ TEST_F(DescriptorTest, NeedsUtf8Check) {
 
   EXPECT_TRUE(foo3->requires_utf8_validation());
   EXPECT_FALSE(bar3->requires_utf8_validation());
+}
+
+TEST_F(DescriptorTest, EnumFieldTreatedAsClosed) {
+  // Make an open enum definition.
+  FileDescriptorProto open_enum_file;
+  open_enum_file.set_name("open_enum.proto");
+  open_enum_file.set_syntax("proto3");
+  AddEnumValue(AddEnum(&open_enum_file, "TestEnumOpen"), "TestEnumOpen_VALUE0",
+               0);
+
+  const EnumDescriptor* open_enum =
+      pool_.BuildFile(open_enum_file)->enum_type(0);
+  EXPECT_FALSE(open_enum->is_closed());
+
+  // Create a message that treats enum fields as closed.
+  FileDescriptorProto closed_file;
+  closed_file.set_name("closed_enum_field.proto");
+  closed_file.add_dependency("open_enum.proto");
+  closed_file.add_dependency("foo.proto");
+
+  DescriptorProto* message = AddMessage(&closed_file, "TestClosedEnumField");
+  AddField(message, "int_field", 1, FieldDescriptorProto::LABEL_OPTIONAL,
+           FieldDescriptorProto::TYPE_INT32);
+  AddField(message, "open_enum", 2, FieldDescriptorProto::LABEL_OPTIONAL,
+           FieldDescriptorProto::TYPE_ENUM)
+      ->set_type_name("TestEnumOpen");
+  AddField(message, "closed_enum", 3, FieldDescriptorProto::LABEL_OPTIONAL,
+           FieldDescriptorProto::TYPE_ENUM)
+      ->set_type_name("TestEnum");
+  const Descriptor* closed_message =
+      pool_.BuildFile(closed_file)->message_type(0);
+
+  EXPECT_FALSE(closed_message->FindFieldByName("int_field")
+                   ->legacy_enum_field_treated_as_closed());
+  EXPECT_TRUE(closed_message->FindFieldByName("closed_enum")
+                  ->legacy_enum_field_treated_as_closed());
+  EXPECT_TRUE(closed_message->FindFieldByName("open_enum")
+                  ->legacy_enum_field_treated_as_closed());
+}
+
+TEST_F(DescriptorTest, EnumFieldTreatedAsOpen) {
+  FileDescriptorProto open_enum_file;
+  open_enum_file.set_name("open_enum.proto");
+  open_enum_file.set_syntax("proto3");
+  AddEnumValue(AddEnum(&open_enum_file, "TestEnumOpen"), "TestEnumOpen_VALUE0",
+               0);
+  DescriptorProto* message = AddMessage(&open_enum_file, "TestOpenEnumField");
+  AddField(message, "int_field", 1, FieldDescriptorProto::LABEL_OPTIONAL,
+           FieldDescriptorProto::TYPE_INT32);
+  AddField(message, "open_enum", 2, FieldDescriptorProto::LABEL_OPTIONAL,
+           FieldDescriptorProto::TYPE_ENUM)
+      ->set_type_name("TestEnumOpen");
+  const FileDescriptor* open_enum_file_desc = pool_.BuildFile(open_enum_file);
+  const Descriptor* open_message = open_enum_file_desc->message_type(0);
+  const EnumDescriptor* open_enum = open_enum_file_desc->enum_type(0);
+  EXPECT_FALSE(open_enum->is_closed());
+  EXPECT_FALSE(open_message->FindFieldByName("int_field")
+                   ->legacy_enum_field_treated_as_closed());
+  EXPECT_FALSE(open_message->FindFieldByName("open_enum")
+                   ->legacy_enum_field_treated_as_closed());
 }
 
 TEST_F(DescriptorTest, IsMap) {
@@ -3979,6 +4041,16 @@ class ValidationErrorTest : public testing::Test {
     BuildFileInTestPool(DescriptorProto::descriptor()->file());
   }
 
+  void BuildDescriptorMessagesInTestPoolWithErrors(
+      absl::string_view expected_errors) {
+    FileDescriptorProto file_proto;
+    DescriptorProto::descriptor()->file()->CopyTo(&file_proto);
+    MockErrorCollector error_collector;
+    EXPECT_TRUE(pool_.BuildFileCollectingErrors(file_proto, &error_collector) ==
+                nullptr);
+    EXPECT_EQ(error_collector.text_, expected_errors);
+  }
+
   DescriptorPool pool_;
 };
 
@@ -4590,50 +4662,6 @@ TEST_F(ValidationErrorTest, HugeFieldNumber) {
       "536870911.\n"
       "foo.proto: Foo: NUMBER: Suggested field numbers for Foo: 1\n");
 }
-
-TEST_F(ValidationErrorTest, ReservedFieldNumber) {
-  BuildFileWithErrors(
-      R"pb(
-        name: "foo.proto"
-        message_type {
-          name: "Foo"
-          field {
-            name: "foo"
-            number: 18999
-            label: LABEL_OPTIONAL
-            type: TYPE_INT32
-          }
-          field {
-            name: "bar"
-            number: 19000
-            label: LABEL_OPTIONAL
-            type: TYPE_MESSAGE
-            type_name: "Foo"
-          }
-          field {
-            name: "baz"
-            number: 19999
-            label: LABEL_OPTIONAL
-            type: TYPE_MESSAGE
-            type_name: ".Foo"
-          }
-          field {
-            name: "moo"
-            number: 20000
-            label: LABEL_OPTIONAL
-            type: TYPE_INT32
-          }
-        }
-      )pb",
-
-      "foo.proto: Foo.bar: NUMBER: Field numbers 19000 through 19999 are "
-      "reserved for the protocol buffer library implementation, and the type "
-      "name must be fully qualified with a `.` prefix.\n"
-      "foo.proto: Foo.baz: NUMBER: Field numbers 19000 through 19999 are "
-      "reserved for the protocol buffer library implementation.\n"
-      "foo.proto: Foo: NUMBER: Suggested field numbers for Foo: 1, 2\n");
-}
-
 
 TEST_F(ValidationErrorTest, ExtensionMissingExtendee) {
   BuildFileWithErrors(
@@ -7105,6 +7133,7 @@ TEST_F(ValidationErrorTest, PackageTooLong) {
       "aaaaaaaa: NAME: Package name is too long\n");
 }
 
+
 // ===================================================================
 // DescriptorDatabase
 
@@ -7378,7 +7407,7 @@ TEST_F(DatabaseBackedPoolTest, ErrorWithErrorCollector) {
 
 TEST_F(DatabaseBackedPoolTest, UndeclaredDependencyOnUnbuiltType) {
   // Check that we find and report undeclared dependencies on types that exist
-  // in the descriptor database but that have not not been built yet.
+  // in the descriptor database but that have not been built yet.
   MockErrorCollector error_collector;
   DescriptorPool pool(&database_, &error_collector);
   EXPECT_TRUE(pool.FindMessageTypeByName("Baz") == nullptr);
@@ -8547,7 +8576,7 @@ TEST_F(LazilyBuildDependenciesTest, GeneratedFile) {
       "google/protobuf/unittest_lazy_dependencies_enum.proto"));
 
   // Verify calling autogenerated function to get a descriptor in the base
-  // file will build that file but none of it's imports. This verifies that
+  // file will build that file but none of its imports. This verifies that
   // lazily_build_dependencies_ is set on the generated pool, and also that
   // the generated function "descriptor()" doesn't somehow subvert the laziness
   // by manually loading the dependencies or something.
@@ -8611,7 +8640,7 @@ TEST_F(LazilyBuildDependenciesTest, Dependency) {
 
   const FileDescriptor* foo_file = pool_.FindFileByName("foo.proto");
   EXPECT_TRUE(foo_file != nullptr);
-  // As expected, requesting foo.proto shouldn't build it's dependencies
+  // As expected, requesting foo.proto shouldn't build its dependencies
   EXPECT_TRUE(pool_.InternalIsFileLoaded("foo.proto"));
   EXPECT_FALSE(pool_.InternalIsFileLoaded("bar.proto"));
   EXPECT_FALSE(pool_.InternalIsFileLoaded("baz.proto"));

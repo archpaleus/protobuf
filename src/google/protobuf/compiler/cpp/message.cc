@@ -85,6 +85,7 @@ using ::google::protobuf::internal::WireFormat;
 using ::google::protobuf::internal::WireFormatLite;
 using ::google::protobuf::internal::cpp::HasHasbit;
 using ::google::protobuf::internal::cpp::Utf8CheckMode;
+using Semantic = ::google::protobuf::io::AnnotationCollector::Semantic;
 using Sub = ::google::protobuf::io::Printer::Sub;
 
 static constexpr int kNoHasbit = -1;
@@ -244,24 +245,11 @@ bool EmitFieldNonDefaultCondition(io::Printer* p, const std::string& prefix,
     format.Indent();
     return true;
   } else if (field->real_containing_oneof()) {
-    auto v = p->WithVars(OneofFieldVars(field));
     format("if ($has_field$) {\n");
     format.Indent();
     return true;
   }
   return false;
-}
-
-// Does the given field have a has_$name$() method?
-bool HasHasMethod(const FieldDescriptor* field) {
-  if (!IsProto3(field->file())) {
-    // In proto1/proto2, every field has a has_$name$() method.
-    return true;
-  }
-  // For message types without true field presence, only fields with a message
-  // type or inside an one-of have a has_$name$() method.
-  return field->cpp_type() == FieldDescriptor::CPPTYPE_MESSAGE ||
-         field->has_optional_keyword() || field->real_containing_oneof();
 }
 
 bool HasInternalHasMethod(const FieldDescriptor* field) {
@@ -731,7 +719,10 @@ void MessageGenerator::GenerateFieldAccessorDeclarations(io::Printer* p) {
          {"clearer",
           [&] {
             p->Emit({Sub("clear_name", absl::StrCat("clear_", name))
-                         .AnnotatedAs(field)},
+                         .AnnotatedAs({
+                             field,
+                             Semantic::kSet,
+                         })},
                     R"cc(
                       $deprecated_attr $void $clear_name$() $impl$;
                     )cc");
@@ -1031,14 +1022,13 @@ void MessageGenerator::GenerateOneofHasBits(io::Printer* p) {
 
 void MessageGenerator::GenerateOneofMemberHasBits(const FieldDescriptor* field,
                                                   io::Printer* p) {
-  auto v = p->WithVars(OneofFieldVars(field));
   auto t = p->WithVars(MakeTrackerCalls(field, options_));
   Formatter format(p);
   // Singular field in a oneof
   // N.B.: Without field presence, we do not use has-bits or generate
   // has_$name$() methods, but oneofs still have set_has_$name$().
   // Oneofs also have private _internal_has_$name$() a helper method.
-  if (HasHasMethod(field)) {
+  if (field->has_presence()) {
     format(
         "inline bool $classname$::has_$name$() const {\n"
         "$annotate_has$"
@@ -1075,7 +1065,6 @@ void MessageGenerator::GenerateFieldClear(const FieldDescriptor* field,
   if (field->real_containing_oneof()) {
     // Clear this field only if it is the active field in this oneof,
     // otherwise ignore
-    auto v = p->WithVars(OneofFieldVars(field));
     auto t = p->WithVars(MakeTrackerCalls(field, options_));
     format("if ($has_field$) {\n");
     format.Indent();
@@ -1287,16 +1276,14 @@ void MessageGenerator::GenerateClassDefinition(io::Printer* p) {
       "}\n"
       "\n");
 
-  if (PublicUnknownFieldsAccessors(descriptor_)) {
-    format(
-        "inline const $unknown_fields_type$& unknown_fields() const {\n"
-        "  return $unknown_fields$;\n"
-        "}\n"
-        "inline $unknown_fields_type$* mutable_unknown_fields() {\n"
-        "  return $mutable_unknown_fields$;\n"
-        "}\n"
-        "\n");
-  }
+  format(
+      "inline const $unknown_fields_type$& unknown_fields() const {\n"
+      "  return $unknown_fields$;\n"
+      "}\n"
+      "inline $unknown_fields_type$* mutable_unknown_fields() {\n"
+      "  return $mutable_unknown_fields$;\n"
+      "}\n"
+      "\n");
 
   // Only generate this member if it's not disabled.
   if (HasDescriptorMethods(descriptor_->file(), options_) &&
@@ -1989,7 +1976,6 @@ void MessageGenerator::GenerateClassMethods(io::Printer* p) {
     auto t = p->WithVars(MakeTrackerCalls(field, options_));
     field_generators_.get(field).GenerateNonInlineAccessorDefinitions(p);
     if (IsCrossFileMaybeMap(field)) {
-      auto v = p->WithVars(OneofFieldVars(field));
       GenerateFieldClear(field, false, p);
     }
   }
@@ -3653,7 +3639,6 @@ void MessageGenerator::GenerateSerializeWithCachedSizesBody(io::Printer* p) {
     LazySerializerEmitter(MessageGenerator* mg, io::Printer* p)
         : mg_(mg),
           p_(p),
-          eager_(IsProto3(mg->descriptor_->file())),
           cached_has_bit_index_(kNoHasbit) {}
 
     ~LazySerializerEmitter() { Flush(); }
@@ -3662,13 +3647,14 @@ void MessageGenerator::GenerateSerializeWithCachedSizesBody(io::Printer* p) {
     // oneof, and handle them at the next Flush().
     void Emit(const FieldDescriptor* field) {
       Formatter format(p_);
-      if (eager_ || MustFlush(field)) {
+
+      if (!field->has_presence() || MustFlush(field)) {
         Flush();
       }
       if (!field->real_containing_oneof()) {
         // TODO(ckennelly): Defer non-oneof fields similarly to oneof fields.
 
-        if (!field->options().weak() && !field->is_repeated() && !eager_) {
+        if (HasHasbit(field) && field->has_presence()) {
           // We speculatively load the entire _has_bits_[index] contents, even
           // if it is for only one field.  Deferring non-oneof emitting would
           // allow us to determine whether this is going to be useful.
@@ -3712,7 +3698,6 @@ void MessageGenerator::GenerateSerializeWithCachedSizesBody(io::Printer* p) {
 
     MessageGenerator* mg_;
     io::Printer* p_;
-    bool eager_;
     std::vector<const FieldDescriptor*> v_;
 
     // cached_has_bit_index_ maintains that:

@@ -48,6 +48,7 @@
 #include "absl/strings/match.h"
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/optional.h"
 #include "google/protobuf/compiler/cpp/names.h"
 #include "google/protobuf/compiler/cpp/options.h"
 #include "google/protobuf/descriptor.pb.h"
@@ -81,7 +82,7 @@ inline std::string DeprecatedAttribute(const Options& /* options */,
 
 inline std::string DeprecatedAttribute(const Options& /* options */,
                                        const EnumValueDescriptor* d) {
-  return d->options().deprecated() ? "PROTOBUF_DEPRECATED_ENUM " : "";
+  return d->options().deprecated() ? "PROTOBUF_DEPRECATED " : "";
 }
 
 // Commonly-used separator comments.  Thick is a line of '=', thin is a line
@@ -322,11 +323,6 @@ std::string SafeFunctionName(const Descriptor* descriptor,
                              const FieldDescriptor* field,
                              absl::string_view prefix);
 
-// Returns true if generated messages have public unknown fields accessors
-inline bool PublicUnknownFieldsAccessors(const Descriptor* message) {
-  return message->file()->syntax() != FileDescriptor::SYNTAX_PROTO3;
-}
-
 // Returns the optimize mode for <file>, respecting <options.enforce_lite>.
 FileOptions_OptimizeMode GetOptimizeFor(const FileDescriptor* file,
                                         const Options& options);
@@ -468,10 +464,6 @@ bool IsStringOrMessage(const FieldDescriptor* field);
 
 std::string UnderscoresToCamelCase(absl::string_view input,
                                    bool cap_next_letter);
-
-inline bool IsProto3(const FileDescriptor* file) {
-  return file->syntax() == FileDescriptor::SYNTAX_PROTO3;
-}
 
 inline bool IsCrossFileMessage(const FieldDescriptor* field) {
   return field->type() == FieldDescriptor::TYPE_MESSAGE &&
@@ -757,6 +749,8 @@ inline bool HasImplData(const Descriptor* desc, const Options& options) {
   return !HasSimpleBaseClass(desc, options);
 }
 
+// DO NOT USE IN NEW CODE! Use io::Printer directly instead. See b/242326974.
+//
 // Formatter is a functor class which acts as a closure around printer and
 // the variable map. It's much like printer->Print except it supports both named
 // variables that are substituted using a key value map and direct arguments. In
@@ -968,13 +962,22 @@ class PROTOC_EXPORT NamespaceOpener {
 
 void GenerateUtf8CheckCodeForString(const FieldDescriptor* field,
                                     const Options& options, bool for_parse,
-                                    const char* parameters,
+                                    absl::string_view parameters,
                                     const Formatter& format);
 
 void GenerateUtf8CheckCodeForCord(const FieldDescriptor* field,
                                   const Options& options, bool for_parse,
-                                  const char* parameters,
+                                  absl::string_view parameters,
                                   const Formatter& format);
+
+void GenerateUtf8CheckCodeForString(io::Printer* p,
+                                    const FieldDescriptor* field,
+                                    const Options& options, bool for_parse,
+                                    absl::string_view parameters);
+
+void GenerateUtf8CheckCodeForCord(io::Printer* p, const FieldDescriptor* field,
+                                  const Options& options, bool for_parse,
+                                  absl::string_view parameters);
 
 struct OneOfRangeImpl {
   struct Iterator {
@@ -1038,9 +1041,17 @@ enum class VerifySimpleType {
 // Returns VerifySimpleType if messages can be verified by predefined methods.
 VerifySimpleType ShouldVerifySimple(const Descriptor* descriptor);
 
-bool IsUtf8String(const FieldDescriptor* field);
-
 bool HasMessageFieldOrExtension(const Descriptor* desc);
+
+// Generates a vector of substitutions for use with Printer::WithVars that
+// contains annotated accessor names for a particular field.
+//
+// Each substitution will be named `absl::StrCat(prefix, "name")`, and will
+// be annotated with `field`.
+std::vector<io::Printer::Sub> AnnotatedAccessors(
+    const FieldDescriptor* field, absl::Span<const absl::string_view> prefixes,
+    absl::optional<google::protobuf::io::AnnotationCollector::Semantic> semantic =
+        absl::nullopt);
 
 }  // namespace cpp
 }  // namespace compiler
